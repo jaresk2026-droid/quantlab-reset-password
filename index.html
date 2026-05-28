@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>重置密码 - A股策略研究工具</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: #f5f5f5; min-height: 100vh; display: flex;
+         align-items: center; justify-content: center; padding: 20px; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+          padding: 32px; max-width: 400px; width: 100%; text-align: center; }
+  h2 { margin-bottom: 8px; font-size: 22px; }
+  .sub { color: #666; font-size: 14px; margin-bottom: 24px; }
+  input { width: 100%; padding: 12px; border: 1px solid #d9d9d9; border-radius: 6px;
+          font-size: 15px; margin-bottom: 12px; outline: none; }
+  input:focus { border-color: #1677ff; }
+  button { width: 100%; padding: 12px; background: #1677ff; color: #fff; border: none;
+           border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #0958d9; }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+  .msg { padding: 12px; border-radius: 6px; margin-top: 16px; font-size: 14px; }
+  .ok { background: #f6ffed; border: 1px solid #b7eb8f; color: #389e0d; }
+  .err { background: #fff2f0; border: 1px solid #ffccc7; color: #cf1322; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="loading">
+    <h2>⏳ 正在验证链接...</h2>
+    <p class="sub">请稍候</p>
+  </div>
+  <div id="form" class="hidden">
+    <h2>🔑 重置密码</h2>
+    <p class="sub">请输入新密码（至少 6 位）</p>
+    <input type="password" id="pwd" placeholder="新密码" />
+    <input type="password" id="pwd2" placeholder="确认新密码" />
+    <button id="btn" onclick="doReset()">确认重置</button>
+    <div id="msg"></div>
+  </div>
+  <div id="expired" class="hidden">
+    <h2>⚠️ 链接无效</h2>
+    <p class="sub">重置链接已过期或无效，请重新发送重置邮件</p>
+    <button onclick="window.location.href='https://jaresk-quantlab.streamlit.app'">返回首页</button>
+  </div>
+</div>
+
+<script>
+var params = new URLSearchParams(window.location.hash.substring(1));
+var token = params.get("access_token");
+var type = params.get("type");
+
+if (!token || type !== "recovery") {
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("expired").classList.remove("hidden");
+} else {
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("form").classList.remove("hidden");
+}
+
+function doReset() {
+  var pwd = document.getElementById("pwd").value;
+  var pwd2 = document.getElementById("pwd2").value;
+  var msg = document.getElementById("msg");
+  var btn = document.getElementById("btn");
+
+  if (pwd.length < 6) { msg.className="msg err"; msg.textContent="密码至少 6 位"; return; }
+  if (pwd !== pwd2) { msg.className="msg err"; msg.textContent="两次密码不一致"; return; }
+
+  btn.disabled = true; btn.textContent = "重置中..."; msg.textContent = "";
+
+  fetch("https://svfgzzdlzqsyjfddaocd.supabase.co/auth/v1/user", {
+    method: "PUT",
+    headers: {
+      "apikey": "sb_publishable_ZB-YjBClX6TsPMcOOZf_FA_NYQL_eBU",
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({password: pwd})
+  })
+  .then(function(r) { return r.json().then(function(d) { return {s:r.status, d:d}; }); })
+  .then(function(r) {
+    if (r.s >= 200 && r.s < 300) {
+      msg.className = "msg ok";
+      msg.innerHTML = "✅ 密码重置成功！<br>3 秒后跳转到登录页...";
+      setTimeout(function() { window.location.href = "https://jaresk-quantlab.streamlit.app"; }, 3000);
+    } else {
+      msg.className = "msg err";
+      var e = r.d.msg || r.d.error_description || "未知错误";
+      if (e.indexOf("expired")>=0 || e.indexOf("invalid")>=0)
+        msg.textContent = "链接已过期，请重新发送重置邮件";
+      else
+        msg.textContent = "重置失败: " + e;
+      btn.disabled = false; btn.textContent = "确认重置";
+    }
+  })
+  .catch(function(e) {
+    msg.className = "msg err"; msg.textContent = "网络异常: " + e.message;
+    btn.disabled = false; btn.textContent = "确认重置";
+  });
+}
+</script>
+</body>
+</html>
